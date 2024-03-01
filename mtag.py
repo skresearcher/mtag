@@ -2,8 +2,6 @@
 '''
 '''
 
-from __future__ import division
-from __future__ import absolute_import
 import numpy as np
 import pandas as pd
 import scipy.optimize
@@ -21,6 +19,7 @@ from ldsc_mod.ldscore import allele_info
 
 import mtag_munge as munge_sumstats
 import warnings
+from functools import reduce
 warnings.filterwarnings("ignore")
 
 __version__ = '1.0.8'
@@ -44,7 +43,7 @@ header += "\n\n"
 
 pd.set_option('display.max_rows', 500)
 pd.set_option('display.width', 800)
-pd.set_option('precision', 12)
+pd.set_option('display.precision', 12)
 pd.set_option('max_colwidth', 800)
 pd.set_option('colheader_justify', 'left')
 
@@ -360,7 +359,7 @@ def load_and_merge_data(args):
                 GWAS_int.loc[snps_to_flip, 'A2'+str(p)] = store_allele
                 logging.info('Flipped the signs of of {} SNPs to make them consistent with the effect allele orderings of the first trait.'.format(np.sum(snps_to_flip)))
 
-        STRAND_AMBIGUOUS_SET = [x for x in allele_info.STRAND_AMBIGUOUS.keys() if allele_info.STRAND_AMBIGUOUS[x]]
+        STRAND_AMBIGUOUS_SET = [x for x in list(allele_info.STRAND_AMBIGUOUS.keys()) if allele_info.STRAND_AMBIGUOUS[x]]
 
         GWAS_int['strand_ambig'] = (GWAS_int['A1'+str(0)].str.upper() + GWAS_int['A2'+str(0)].str.upper()).isin(STRAND_AMBIGUOUS_SET)
 
@@ -451,7 +450,7 @@ def estimate_sigma(data_df, args):
             ld_ss_name['BETA' + str(p)] = 'BETA'
             ld_ss_name['SE' + str(p)] = 'SE'
 
-        gwas_ss_df[p] = data_df[ld_ss_name.keys()].copy()
+        gwas_ss_df[p] = data_df[list(ld_ss_name.keys())].copy()
         gwas_ss_df[p] = gwas_ss_df[p].rename(columns=ld_ss_name)
 
     # run ldsc
@@ -928,7 +927,7 @@ def write_summary(args,Zs,Ns,Fs,mtag_betas,mtag_se,mtag_factor):
         summary_df.loc[p+1, '# SNPs used'] = int(len(Zs[:,p]))
 
         if args.meta_format:
-            comb_df_extract = [Ns[y][x] for y in Ns.keys() for x in Ns[y].keys() if x==p]
+            comb_df_extract = [Ns[y][x] for y in list(Ns.keys()) for x in list(Ns[y].keys()) if x==p]
             out_df = pd.concat(comb_df_extract, axis=0)
             summary_df.loc[p+1, 'N (max)'] = np.max(out_df[args.n_name])
             summary_df.loc[p+1, 'N (mean)'] = np.mean(out_df[args.n_name])
@@ -963,7 +962,7 @@ def save_mtag_results_U(args, comb_df):
     '''    
     for p in range(args.P):
         logging.info('Writing Phenotype {} to file...'.format(p+1))
-        comb_df_extract = [comb_df[y][x] for y in comb_df.keys() for x in comb_df[y].keys() if x==p]
+        comb_df_extract = [comb_df[y][x] for y in list(comb_df.keys()) for x in list(comb_df[y].keys()) if x==p]
         out_df = pd.concat(comb_df_extract, axis=0)
         M_0 = out_df.shape[0]
 
@@ -1015,17 +1014,12 @@ def simplex_walk(num_dims, samples_per_dim):
     """
     A generator that returns lattice points on an n-simplex.
     """
-    try:
-        from itertools import izip
-    except:
-        izip = zip
-
     max_ = samples_per_dim + num_dims - 1
-    for c in itertools.combinations(range(max_), num_dims):
+    for c in itertools.combinations(list(range(max_)), num_dims):
         #logging.info(c)
         c = list(c)
         yield np.array([(y - x - 1.) / (samples_per_dim - 1.)
-               for x, y in izip([-1] + c, c + [max_])])
+               for x, y in zip([-1] + c, c + [max_])])
 
 def scale_omega(gen_corr_mat, priors, S=None):
     assert gen_corr_mat.shape[0] == gen_corr_mat.shape[1]
@@ -1300,7 +1294,7 @@ def mtag(args):
     header_sub += "Calling ./mtag.py \\\n"
     defaults = vars(parser.parse_args(''))
     opts = vars(args)
-    non_defaults = [x for x in opts.keys() if opts[x] != defaults[x]]
+    non_defaults = [x for x in list(opts.keys()) if opts[x] != defaults[x]]
     options = ['--'+x.replace('_','-')+' '+str(opts[x])+' \\' for x in non_defaults]
     header_sub += '\n'.join(options).replace('True','').replace('False','')
     header_sub = header_sub[0:-1] + '\n'
@@ -1395,7 +1389,7 @@ def mtag(args):
         combo_dict = dict()
 
         # Loop over subtypes of SNPs
-        comb_df = dict.fromkeys(sub_dict.keys())
+        comb_df = dict.fromkeys(list(sub_dict.keys()))
 
         for s in range(len(sub_dict)):
             t = np.sum(list(sub_dict.keys())[s])
@@ -1444,7 +1438,7 @@ def mtag(args):
                 comb_df[sub_list[s][0]][t]['mtag_pval'] = p_values(comb_df[sub_list[s][0]][t]['mtag_z'])
 
         # check all elements sum to union SNPs
-        comb_flat = [list(comb_df[y].values())[0] for y in comb_df.keys()]
+        comb_flat = [list(comb_df[y].values())[0] for y in list(comb_df.keys())]
         assert DATA_U.shape[0] == np.sum(np.asarray([x.shape[0] for x in comb_flat]))
 
     mtag_betas, mtag_se, mtag_factor = mtag_analysis(Zs, Ns, args.omega_hat, args.sigma_hat)
